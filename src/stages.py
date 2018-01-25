@@ -291,7 +291,7 @@ class Stages(object):
         command = 'bcftools sort -o {vcf_out} -O z {vcf_in}'.format(vcf_out=vcf_out, vcf_in=vcf_in)
         run_stage(self.state, 'sort_vcfs', command)
     
-    def index_vcfs(self, vcf_in):
+    def index_vcfs(self, vcf_in, vcf_out):
         command = 'bcftools index --tbi {vcf_in}'.format(vcf_in=vcf_in)
         run_stage(self.state, 'index_vcfs', command)
     
@@ -300,7 +300,7 @@ class Stages(object):
         command = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=join_vcf_files)
         run_stage(self.state, 'concatenate_vcfs', command) 
 
-    def index_final_vcf(self, vcf_in):
+    def index_final_vcf(self, vcf_in, vcf_out):
         command = 'bcftools index --tbi {vcf_in}'.format(vcf_in=vcf_in)
         run_stage(self.state, 'index_final_vcf', command)
 
