@@ -187,14 +187,14 @@ def make_pipeline(state):
         filter=suffix('.vcf'),
         output='sorted.vcf.gz')
 
-pipeline.transform(
+    pipeline.transform(
         task_func=stages.index_vcfs,
         name='index_vcfs',
         input=output_from('sort_vcfs'),
         filter=suffix('.vcf.gz'),
         output='sorted.vcf.gz.tbi')
 
-(pipeline.transform(
+    (pipeline.transform(
         task_func=stages.concatenate_vcfs,
         name='concatenate_vcfs',
         input=output_from('sort_vcfs'),
@@ -202,7 +202,7 @@ pipeline.transform(
         output='variants/undr_rover/combined_undr_rover.vcf.gz')
         .follows('index_vcfs'))
 
-pipeline.transform(
+    pipeline.transform(
         task_func=stages.index_final_vcf,
         name='index_final_vcf',
         input=output_from('concatenate_vcfs'),
