@@ -192,7 +192,7 @@ def make_pipeline(state):
         name='index_vcfs',
         input=output_from('sort_vcfs'),
         filter=suffix('sorted.vcf.gz'),
-        output='.sorted.vcf.gz.tbi')
+        #output='.sorted.vcf.gz.tbi')
 
     (pipeline.merge(
         task_func=stages.concatenate_vcfs,
@@ -206,6 +206,6 @@ def make_pipeline(state):
         name='index_final_vcf',
         input=output_from('concatenate_vcfs'),
         filter=suffix('.vcf.gz'),
-        output='.vcf.gz.tbi')
+        #output='.vcf.gz.tbi')
 
     return pipeline
