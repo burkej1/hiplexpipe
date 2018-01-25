@@ -2,7 +2,7 @@
 
 ## A bioinformatics pipeline for variant calling for [Hi-Plex](http://hiplex.org/) sequencing.
 
-Author: Khalid Mahmood (kmahmood@unimelb.edu.au)
+Author: Khalid Mahmood (kmahmood@unimelb.edu.au).
 This version modified heavily for use on Monash M3.massive cluster by Jason Steen (jason.steen@monash.edu)
 
 
