@@ -171,27 +171,7 @@ def make_pipeline(state):
         filter=suffix('.raw.annotate.vcf'),
         output='.raw.annotate.filtered.vcf')
 
-    # Apply NORM
-    #(pipeline.transform(
-    #    task_func=stages.apply_vt,
-    #    name='apply_vt',
-    #    input=output_from('apply_variant_filtration_gatk'),
-    #    filter=suffix('.raw.annotate.filtered.vcf'),
-        # add_inputs=add_inputs(['variants/ALL.indel_recal', 'variants/ALL.indel_tranches']),
-    #    output='.raw.annotate.filtered.norm.vcf')
-    #    .follows('apply_variant_filtration_gatk'))
-
-    # Apply VEP
-    #(pipeline.transform(
-    #    task_func=stages.apply_vep,
-    #    name='apply_vep',
-    #    input=output_from('apply_vt'),
-    #    filter=suffix('.raw.annotate.filtered.norm.vcf'),
-        # add_inputs=add_inputs(['variants/ALL.indel_recal', 'variants/ALL.indel_tranches']),
-     #   output='.raw.annotate.filtered.norm.vep.vcf')
-     #   .follows('apply_vt'))
-
-# Apply VEP (skip apply_vt)
+    # Apply VEP 
     (pipeline.transform(
         task_func=stages.apply_vep,
         name='apply_vep',
@@ -200,40 +180,33 @@ def make_pipeline(state):
         output='.raw.annotate.filtered.vep.vcf')
         .follows('apply_variant_filtration_gatk'))
 
-    # Apply SnpEff
-    #(pipeline.transform(
-    #    task_func=stages.apply_snpeff,
-    #    name='apply_snpeff',
-    #    input=output_from('apply_vep'),
-    #    filter=suffix('.raw.annotate.filtered.norm.vep.vcf'),
-    #    # add_inputs=add_inputs(['variants/ALL.indel_recal', 'variants/ALL.indel_tranches']),
-    #    output='.raw.annotate.filtered.norm.vep.snpeff.vcf')
-    #    .follows('apply_vep'))
+    pipeline.transform(
+        task_func=stages.sort_vcfs,
+        name='sort_vcfs',
+        input=output_from('apply_undr_rover'),
+        filter=suffix('.vcf'),
+        output='sorted.vcf.gz')
 
-    # Apply vcfanno
-    #(pipeline.transform(
-    #    task_func=stages.apply_vcfanno,
-    #    name='apply_vcfanno',
-    #    input=output_from('apply_snpeff'),
-    #    filter=suffix('.raw.annotate.filtered.norm.vep.snpeff.vcf'),
-        # add_inputs=add_inputs(['variants/ALL.indel_recal', 'variants/ALL.indel_tranches']),
-    #    output='.annotated.vcf')
-    #    .follows('apply_snpeff'))
+pipeline.transform(
+        task_func=stages.index_vcfs,
+        name='index_vcfs',
+        input=output_from('sort_vcfs'),
+        filter=suffix('.vcf.gz'),
+        output='sorted.vcf.gz.tbi')
 
-    # Concatenate undr_rover vcf files
-    #pipeline.merge(
-    #    task_func=stages.apply_cat_vcf,
-    #    name='apply_cat_vcf',
-    #    input=output_from('apply_undr_rover'),
-    #    output='variants/undr_rover/ur.vcf.gz')
+(pipeline.transform(
+        task_func=stages.concatenate_vcfs,
+        name='concatenate_vcfs',
+        input=output_from('sort_vcfs'),
+        filter=suffix('.vcf.gz'),
+        output='variants/undr_rover/combined_undr_rover.vcf.gz')
+        .follows('index_vcfs'))
 
-    # # Apple VEP on concatenated undr_rover vcf file
-    # (pipeline.transform(
-    #     task_func=stages.apply_vep,
-    #     name='apply_vep_ur',
-    #     input=output_from('apply_cat_vcf'),
-    #     filter=suffix('.vcf.gz'),
-    #     output='.vep.vcf')
-    #     .follows('apply_cat_vcf'))
-    
+pipeline.transform(
+        task_func=stages.index_final_vcf,
+        name='index_final_vcf',
+        input=output_from('concatenate_vcfs'),
+        filter=suffix('.vcf.gz'),
+        output='.vcf.gz.tbi')
+
     return pipeline

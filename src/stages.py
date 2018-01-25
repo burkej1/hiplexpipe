@@ -278,8 +278,6 @@ class Stages(object):
 #                    {txt_out}'.format(hist_in=a, map_genome_in=b, map_target_in=c, raw_reads_in=d , sample_name=e , txt_out=txt_out)
 #        run_stage(self.state, 'generate_stats', command)
 
-
-
 #Rscript --vanilla ~/vh83/pipelines/code/summary_stat.R \
 #        metrics/${sample_run_name}.sort.bedtools_hist_all.txt \
 #        metrics/${sample_run_name}.sort.mapped_to_genome.txt \
@@ -287,3 +285,26 @@ class Stages(object):
 #        metrics/${sample_run_name}.sort.total_raw_reads.txt \
 #        ${sample_run_name} \
 #        ${summary_prefix}_summary_coverage.txt
+
+    def sort_vcfs(self, vcf_in, vcf_out):
+        '''sort undr_rover vcf files'''
+       command = 'bcftools sort -o {vcf_out} -O z {vcf_in}'.format(vcf_out=vcf_out, vcf_in=vcf_in)
+
+    def index_vcfs(self, vcf_in):
+        command = 'bcftools index --tbi {vcf_in}'.format(vcf_in=vcf_in)
+        run.stage(self.state, 'index_vcfs', command)
+    
+    def concatenate_vcfs(self, vcf_files_in, vcf_out):
+        join_vcf_files = ' '.join([vcf for vcf in vcf_files_in])
+        command = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=join_vcf_files)
+        run.stage(self.state, 'concatenate_vcfs', command) 
+
+    def index_final_vcf(self, vcf_in):
+        command = 'bcftools index --tbi {vcf_in}'.format(vcf_in=vcf_in)
+        run.stage(self.state, 'index_final_vcf', command)
+
+
+
+
+
+
