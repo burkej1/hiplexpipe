@@ -288,8 +288,9 @@ class Stages(object):
 
     def sort_vcfs(self, vcf_in, vcf_out):
         '''sort undr_rover vcf files'''
-       command = 'bcftools sort -o {vcf_out} -O z {vcf_in}'.format(vcf_out=vcf_out, vcf_in=vcf_in)
-
+        command = 'bcftools sort -o {vcf_out} -O z {vcf_in}'.format(vcf_out=vcf_out, vcf_in=vcf_in)
+        run.stage(self.state, 'sort_vcfs', command)
+    
     def index_vcfs(self, vcf_in):
         command = 'bcftools index --tbi {vcf_in}'.format(vcf_in=vcf_in)
         run.stage(self.state, 'index_vcfs', command)
