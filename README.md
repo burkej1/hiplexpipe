@@ -53,9 +53,9 @@ We recommend using a python virtual environment. Following is an examples of how
 module load drmaa
 export DRMAA_LIBRARY_PATH=/usr/local/drmaa/1.0.7/lib/libdrmaa.so
 source venv_name/bin/activate
+pip install numpy
 pip install git+https://github.com/SoutheyLab/undr_rover
-git clone https://github.com/SoutheyLab/hiplexpipe
-python setup.py install
+pip install git+https://github.com/SoutheyLab/hiplexpipe
 hiplexpipe --config pipeline.config --use_threads --log_file pipeline.log --jobs 10 --verbose 3 --just_print
 ```
 
