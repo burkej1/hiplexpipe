@@ -181,7 +181,7 @@ def make_pipeline(state):
         output=('raw.annotate.snps.vcf')
 
     pipeline.transform(
-        task_func(stages.select_variants_indels_gatk,
+        task_func=stages.select_variants_indels_gatk,
         name='select_variants_indels_gatk',
         input=output_from('variant_annotator_gatk'),
         filter=suffix('raw.annotate.vcf'),
