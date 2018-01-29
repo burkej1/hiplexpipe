@@ -205,7 +205,47 @@ class Stages(object):
                     .format(reference=self.reference, cores=cores, vcf_in=vcf_in, vcf_out=vcf_out)
         self.run_gatk('variant_annotator_gatk', gatk_args)
 
-    def apply_variant_filtration_gatk(self, inputs, vcf_out):
+######  Variant splitting and filtering sections
+######  Original variant filtration command
+#    def apply_variant_filtration_gatk(self, inputs, vcf_out):
+#        '''Apply Variant Filtration using gatk'''
+#        vcf_in = inputs
+#        cores = self.get_stage_options('apply_variant_filtration_gatk', 'cores')
+#        gatk_args = "-T VariantFiltration --disable_auto_index_creation_and_locking_when_reading_rods " \
+#                    "-R {reference} " \
+#                    "--filterExpression \"QUAL < 30.0\" --filterName \"VeryLowQual\" " \
+#                    "--filterExpression \"QD < 2.0\" --filterName \"LowQD\" " \
+#                    "--filterExpression \"DP < 10\" --filterName \"LowCoverage\" " \
+#                    "--filterExpression \"MQ < 30.0\" --filterName \"LowMappingQual\" " \
+#                    "--filterExpression \"SOR > 4.0\" --filterName \"StrandBias\" " \
+#                    "--filterExpression \"HRun >= 7.0\" --filterName \"HRun7\" " \
+#                    "--filterExpression \"MQRankSum < -12.5\" --filterName \"MQRankSum\" " \
+#                    "--filterExpression \"ReadPosRankSum < -8.0\" --filterName \"ReadPosRankSum\" " \
+#                    "--variant {vcf_in} -o {vcf_out}".format(reference=self.reference,
+#                                                            cores=cores, vcf_in=vcf_in, vcf_out=vcf_out)
+#        self.run_gatk('apply_variant_filtration_gatk', gatk_args)
+
+    def select_variants_snps_gatk(self, inputs, vcf_out):
+        '''Extract SNPs from genotyped vcf'''
+        vcf_in = inputs
+        gatk_args = "-T SelectVariants " \
+                    "-R {reference} " \
+                    "-V {vcf_in} " \
+                    "-selectType SNP " \
+                    "-o {vcf_out}".format(reference=self.reference, vcf_in=vcf_in, vcf_out=vcf_out)
+        self.run_gatk('select_variants_snps_gatk', gatk_args)
+
+    def select_variants_indels_gatk(self, inputs, vcf_out):
+        '''Extract Indels from genotypes vcf'''
+        vcf_in = inputs
+        gatk_args = "-T SelectVariants " \
+                    "-R {reference} " \
+                    "-V {vcf_in} " \
+                    "-selectType INDEL " \
+                    "-o {vcf_out}".format(reference=self.reference, vcf_in=vcf_in, vcf_out=vcf_out)
+        self.run_gatk('select_variants_indels_gatk', gatk_args)
+
+    def apply_variant_filtration_snps_gatk(self, inputs, vcf_out):
         '''Apply Variant Filtration using gatk'''
         vcf_in = inputs
         cores = self.get_stage_options('apply_variant_filtration_gatk', 'cores')
@@ -215,13 +255,42 @@ class Stages(object):
                     "--filterExpression \"QD < 2.0\" --filterName \"LowQD\" " \
                     "--filterExpression \"DP < 10\" --filterName \"LowCoverage\" " \
                     "--filterExpression \"MQ < 30.0\" --filterName \"LowMappingQual\" " \
-                    "--filterExpression \"SOR > 4.0\" --filterName \"StrandBias\" " \
-                    "--filterExpression \"HRun >= 7.0\" --filterName \"HRun7\" " \
+                    "--filterExpression \"SOR > 3.0\" --filterName \"StrandBias\" " \
                     "--filterExpression \"MQRankSum < -12.5\" --filterName \"MQRankSum\" " \
                     "--filterExpression \"ReadPosRankSum < -8.0\" --filterName \"ReadPosRankSum\" " \
                     "--variant {vcf_in} -o {vcf_out}".format(reference=self.reference,
                                                             cores=cores, vcf_in=vcf_in, vcf_out=vcf_out)
-        self.run_gatk('apply_variant_filtration_gatk', gatk_args)
+        self.run_gatk('apply_variant_filtration_snps_gatk', gatk_args)
+
+    def apply_variant_filtration_indels_gatk(self, inputs, vcf_out):
+        '''Apply Variant Filtration using gatk'''
+        vcf_in = inputs
+        cores = self.get_stage_options('apply_variant_filtration_gatk', 'cores')
+        gatk_args = "-T VariantFiltration --disable_auto_index_creation_and_locking_when_reading_rods " \
+                    "-R {reference} " \
+                    "--filterExpression \"QUAL < 30.0\" --filterName \"VeryLowQual\" " \
+                    "--filterExpression \"QD < 2.0\" --filterName \"LowQD\" " \
+                    "--filterExpression \"DP < 10\" --filterName \"LowCoverage\" " \
+                    "--filterExpression \"ReadPosRankSum < -20.0\" --filterName \"ReadPosRankSum\" " \
+                    "--variant {vcf_in} -o {vcf_out}".format(reference=self.reference,
+                                                            cores=cores, vcf_in=vcf_in, vcf_out=vcf_out)
+        self.run_gatk('apply_variant_filtration_indels_gatk', gatk_args)
+
+    def merge_filtered_vcfs_gatk(self, inputs, vcf_out):
+        '''Merge filtered vcfs, snps and indels'''
+        # How this might work if used as a transform to the indel filtering stage (assuming snp filtering
+        # is also complete).
+        indels_vcf = inputs
+        suffix = ".filtered-indels.vcf"
+        snps_vcf = indels_vcf.rstrip(suffix) + ".filtered-snps.vcf"  # Constructing the path for the snps vcf
+        gatk_args = "-T CombineVariants " \
+                    "-R {reference} " \
+                    "-V:2 {indels_vcf} " \
+                    "-V:1 {snps_vcf} " \
+                    "-o {vcf_out} " \
+                    "-genotypeMergeOptions PRIORITIZE " \
+                    "-priority 1,2".format(reference=self.reference, indels_vcf=indels_vcf, 
+                                           snps_vcf=snps_vcf, vcf_out=vcf_out)
 
     def apply_vep(self, inputs, vcf_out):
         '''Apply VEP'''
