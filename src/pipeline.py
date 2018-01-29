@@ -163,22 +163,70 @@ def make_pipeline(state):
        filter=suffix('.raw.vcf'),
        output='.raw.annotate.vcf')
 
-    # Apply VariantFiltration using GATK
-    pipeline.transform(
-        task_func=stages.apply_variant_filtration_gatk,
-        name='apply_variant_filtration_gatk',
-        input=output_from('variant_annotator_gatk'),
-        filter=suffix('.raw.annotate.vcf'),
-        output='.raw.annotate.filtered.vcf')
+#    # Apply VariantFiltration using GATK
+#    pipeline.transform(
+#        task_func=stages.apply_variant_filtration_gatk,
+#        name='apply_variant_filtration_gatk',
+#        input=output_from('variant_annotator_gatk'),
+#        filter=suffix('.raw.annotate.vcf'),
+#        output='.raw.annotate.filtered.vcf')
 
-    # Apply VEP 
+#### split snps and indels for filtering ####
+
+    pipeline.transform(
+        task_func=stages.select_variants_snps_gatk,
+        name='select_variants_snps_gatk',
+        input=output_from('variant_annotator_gatk'),
+        filter=suffix('raw.annotate.vcf'),
+        output=('raw.annotate.snps.vcf')
+
+    pipeline.transform(
+        task_func(stages.select_variants_indels_gatk,
+        name='select_variants_indels_gatk',
+        input=output_from('variant_annotator_gatk'),
+        filter=suffix('raw.annotate.vcf'),
+        output=('raw.annotate.indels.vcf')
+
+    pipeline.transform(
+        task_func=stages.apply_variant_filtration_snps_gatk,
+        name='apply_variant_filtration_snps_gatk',
+        input=output_from('select_variants_snps_gatk'),
+        filter=suffix('raw.annotate.snps.vcf'),
+        output=('raw.annotate.snps.filtered.vcf')
+
+    pipeline.transform(
+        task_func=stages.apply_variant_filtration_indels_gatk,
+        name='apply_variant_filtration_indels_gatk',
+        input=output_from('select_variants_indels_gatk'),
+        filter=suffix('raw.annotate.indels.vcf'),
+        output=('raw.annotate.snps.filtered.indels.vcf')
+
+    pipeline.transform(
+        task_function=stages.merge_filtered_vcfs_gatk,
+        name='merge_filtered_vcfs_gatk',
+        input=output_from('apply_variant_filtration_indels_gatk'),
+        filter=suffix('raw.annotate.indels.vcf'),
+        output=('raw.annotate.filtered.merged.vcf')
+
+#    # Apply VEP 
+#    (pipeline.transform(
+#        task_func=stages.apply_vep,
+#        name='apply_vep',
+#        input=output_from('apply_variant_filtration_gatk'),
+#        filter=suffix('.raw.annotate.filtered.vcf'),
+#        output='.raw.annotate.filtered.vep.vcf')
+#        .follows('apply_variant_filtration_gatk'))
+
+     #Apply VEP 
     (pipeline.transform(
         task_func=stages.apply_vep,
         name='apply_vep',
-        input=output_from('apply_variant_filtration_gatk'),
-        filter=suffix('.raw.annotate.filtered.vcf'),
-        output='.raw.annotate.filtered.vep.vcf')
-        .follows('apply_variant_filtration_gatk'))
+        input=output_from('merge_filtered_vcfs_gatk'),
+        filter=suffix('.raw.annotate.filtered.merged.vcf'),
+        output='.raw.annotate.filtered.merged.vep.vcf')
+        .follows('merge_filtered_vcfs_gat'))
+
+#### concatenate undr_rover vcfs ####
 
     pipeline.transform(
         task_func=stages.sort_vcfs,

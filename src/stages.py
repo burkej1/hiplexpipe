@@ -281,8 +281,8 @@ class Stages(object):
         # How this might work if used as a transform to the indel filtering stage (assuming snp filtering
         # is also complete).
         indels_vcf = inputs
-        suffix = ".filtered-indels.vcf"
-        snps_vcf = indels_vcf.rstrip(suffix) + ".filtered-snps.vcf"  # Constructing the path for the snps vcf
+        suffix = ".indels.filtered.vcf"
+        snps_vcf = indels_vcf.rstrip(suffix) + ".snps.filtered.vcf"  # Constructing the path for the snps vcf
         gatk_args = "-T CombineVariants " \
                     "-R {reference} " \
                     "-V:2 {indels_vcf} " \
