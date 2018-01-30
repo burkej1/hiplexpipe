@@ -287,7 +287,7 @@ class Stages(object):
                     "-V:1 {indels_vcf} " \
                     "-o {vcf_out} " \
                     "-genotypeMergeOptions PRIORITIZE " \
-                    "-priority 1,2".format(reference=self.reference, snps_cvf=snps_vcf, indels_vcf=indels_vcf, 
+                    "-priority 1,2".format(reference=self.reference, snps_vcf=snps_vcf, indels_vcf=indels_vcf, 
                                            vcf_out=vcf_out)
 
     def apply_vep(self, inputs, vcf_out):
