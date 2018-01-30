@@ -202,7 +202,7 @@ def make_pipeline(state):
         output='raw.annotate.indels.filtered.vcf')
 
     (pipeline.transform(
-        task_function=stages.merge_filtered_vcfs_gatk,
+        task_func=stages.merge_filtered_vcfs_gatk,
         name='merge_filtered_vcfs_gatk',
         input=output_from('apply_variant_filtration_snps_gatk'),
         filter=suffix('.raw.annotate.snps.filtered.vcf'),
