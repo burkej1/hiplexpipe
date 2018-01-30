@@ -280,17 +280,15 @@ class Stages(object):
         '''Merge filtered vcfs, snps and indels'''
         # How this might work if used as a transform to the indel filtering stage (assuming snp filtering
         # is also complete).
-        indels_vcf = inputs
-        suffix = ".indels.filtered.vcf"
-        snps_vcf = indels_vcf.rstrip(suffix) + ".snps.filtered.vcf"  # Constructing the path for the snps vcf
+        snps_vcf, [indels_vcf] = inputs
         gatk_args = "-T CombineVariants " \
                     "-R {reference} " \
-                    "-V:2 {indels_vcf} " \
-                    "-V:1 {snps_vcf} " \
+                    "-V:2 {snps_vcf} " \
+                    "-V:1 {indels_vcf} " \
                     "-o {vcf_out} " \
                     "-genotypeMergeOptions PRIORITIZE " \
-                    "-priority 1,2".format(reference=self.reference, indels_vcf=indels_vcf, 
-                                           snps_vcf=snps_vcf, vcf_out=vcf_out)
+                    "-priority 1,2".format(reference=self.reference, snps_cvf=snps_vcf, indels_vcf=indels_vcf, 
+                                           vcf_out=vcf_out)
 
     def apply_vep(self, inputs, vcf_out):
         '''Apply VEP'''
