@@ -228,7 +228,7 @@ def make_pipeline(state):
         input=output_from('merge_filtered_vcfs_gatk'),
         filter=suffix('.raw.annotate.filtered.merged.vcf'),
         output='.raw.annotate.filtered.merged.vep.vcf')
-        .follows('merge_filtered_vcfs_gat'))
+        .follows('merge_filtered_vcfs_gatk'))
 
 #### concatenate undr_rover vcfs ####
 
