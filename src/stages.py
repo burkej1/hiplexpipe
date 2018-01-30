@@ -289,6 +289,8 @@ class Stages(object):
                     "-genotypeMergeOptions PRIORITIZE " \
                     "-priority 1,2".format(reference=self.reference, snps_vcf=snps_vcf, indels_vcf=indels_vcf, 
                                            vcf_out=vcf_out)
+        self.run_gatk('merge_filtered_vcfs_gatk', gatk_args)
+    
 
     def apply_vep(self, inputs, vcf_out):
         '''Apply VEP'''
