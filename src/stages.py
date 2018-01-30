@@ -169,18 +169,18 @@ class Stages(object):
         # g_vcf_files = ' '.join(['--variant ' + vcf for vcf in vcf_files_in])
         merge_commands = []
         temp_merge_outputs = []
-        for n in range(0, math.ceil(float(len(vcf_files_in)) / 100.0)):
+        for n in range(0, int(math.ceil(float(len(vcf_files_in)) / 100.0))):
             start = n * 100
             filelist = vcf_files_in[start:start + 100]
             filelist_command = ' '.join(['--variant ' + vcf for vcf in filelist])
-            temp_merge_filename = vcf_out.rstrip('.vcf') + "temp_{start}.vcf"
+            temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf"
             gatk_args_full = "java -Xmx{mem}g -jar {jar_path} -T CombineGVCFs -R {reference} " \
                              "--disable_auto_index_creation_and_locking_when_reading_rods " \
                              "{g_vcf_files} -o {vcf_out}; ".format(reference=self.reference, 
-                                                                 jar_path=GATK_JAR, 
-                                                                 mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
-                                                                 g_vcf_files=filelist_command, 
-                                                                 vcf_out=temp_merge_filename)
+                                                                   jar_path=GATK_JAR, 
+                                                                   mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
+                                                                   g_vcf_files=filelist_command, 
+                                                                   vcf_out=temp_merge_filename)
             merge_commands.append(gatk_args_full)
             temp_merge_outputs.append(temp_merge_filename)
 
@@ -188,10 +188,10 @@ class Stages(object):
         gatk_args_full_final = "java -Xmx{mem}g -jar {jar_path} -T CombineGVCFs -R {reference} " \
                                "--disable_auto_index_creation_and_locking_when_reading_rods " \
                                "{g_vcf_files} -o {vcf_out}".format(reference=self.reference, 
-                                                                     jar_path=GATK_JAR, 
-                                                                     mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
-                                                                     g_vcf_files=final_merge_vcfs, 
-                                                                     vcf_out=vcf_out)
+                                                                   jar_path=GATK_JAR, 
+                                                                   mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
+                                                                   g_vcf_files=final_merge_vcfs, 
+                                                                   vcf_out=vcf_out)
 
         merge_commands.append(gatk_args_full_final)
         final_command = ''.join(merge_commands)
