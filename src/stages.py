@@ -171,6 +171,7 @@ class Stages(object):
                     "{g_vcf_files} -o {vcf_out}".format(reference=self.reference,
                                                         g_vcf_files=g_vcf_files, vcf_out=vcf_out)
         self.run_gatk('combine_gvcf_gatk', gatk_args)
+# Comment
 
     def genotype_gvcf_gatk(self, combined_vcf_in, vcf_out):
         '''Genotype G.VCF files using GATK'''
