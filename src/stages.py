@@ -169,11 +169,11 @@ class Stages(object):
         # g_vcf_files = ' '.join(['--variant ' + vcf for vcf in vcf_files_in])
         merge_commands = []
         temp_merge_outputs = []
-        for n in range(0, int(math.ceil(float(len(vcf_files_in)) / 100.0))):
-            start = n * 100
-            filelist = vcf_files_in[start:start + 100]
+        for n in range(0, int(math.ceil(float(len(vcf_files_in)) / 200.0))):
+            start = n * 200
+            filelist = vcf_files_in[start:start + 200]
             filelist_command = ' '.join(['--variant ' + vcf for vcf in filelist])
-            temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf"
+            temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf".format(start=str(start))
             gatk_args_full = "java -Xmx{mem}g -jar {jar_path} -T CombineGVCFs -R {reference} " \
                              "--disable_auto_index_creation_and_locking_when_reading_rods " \
                              "{g_vcf_files} -o {vcf_out}; ".format(reference=self.reference, 
