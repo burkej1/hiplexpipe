@@ -389,17 +389,33 @@ class Stages(object):
         command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
         run_stage(self.state, 'index_vcfs', command)
     
+#    def concatenate_vcfs(self, vcf_files_in, vcf_out):
+#        join_vcf_files = ' '.join([vcf for vcf in vcf_files_in])
+#        command = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=join_vcf_files)
+#        run_stage(self.state, 'concatenate_vcfs', command) 
+
     def concatenate_vcfs(self, vcf_files_in, vcf_out):
-        join_vcf_files = ' '.join([vcf for vcf in vcf_files_in])
-        command = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=join_vcf_files)
-        run_stage(self.state, 'concatenate_vcfs', command) 
+        merge_commands = []
+        temp_merge_outputs = []
+        for n in range(0, int(math.ceil(float(len(vcf_files_in)) / 200.0))):
+            start = n * 200
+            filelist = vcf_files_in[start:start + 200]
+            filelist_command = ' '.join([vcf for vcf in filelist])
+            temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf".format(start=str(start))
+            command1 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=temp_merge_filename, join_vcf_files=filelist_command)     
+            merge_commands.append(command1)
+            temp_merge_outputs.append(temp_merge_filename)
+
+        final_merge_vcfs = ' '.join([vcf for vcf in temp_merge_outputs])
+        command2 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=final_merge_vcfs)        
+
+        merge_commands.append(command2)
+        final_command = ''.join(merge_commands)
+        run_stage(self.state, 'combine_gvcf_gatkte_vcfs', final_command)
 
     def index_final_vcf(self, vcf_in, vcf_out):
         command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
         run_stage(self.state, 'index_final_vcf', command)
-
-
-
 
 
 
