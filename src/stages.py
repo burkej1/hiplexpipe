@@ -402,12 +402,12 @@ class Stages(object):
             filelist = vcf_files_in[start:start + 200]
             filelist_command = ' '.join([vcf for vcf in filelist])
             temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf".format(start=str(start))
-            command1 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=temp_merge_filename, join_vcf_files=filelist_command)     
+            command1 = 'module load bcftools && bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=temp_merge_filename, join_vcf_files=filelist_command)     
             merge_commands.append(command1)
             temp_merge_outputs.append(temp_merge_filename)
 
         final_merge_vcfs = ' '.join([vcf for vcf in temp_merge_outputs])
-        command2 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=final_merge_vcfs)        
+        command2 = 'module load bcftools && bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=final_merge_vcfs)        
 
         merge_commands.append(command2)
         final_command = ''.join(merge_commands)
