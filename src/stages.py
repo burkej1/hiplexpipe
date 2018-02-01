@@ -411,7 +411,7 @@ class Stages(object):
 
         merge_commands.append(command2)
         final_command = ''.join(merge_commands)
-        run_stage(self.state, 'combine_gvcf_gatkte_vcfs', final_command)
+        run_stage(self.state, 'concatenate_vcfs', final_command)
 
     def index_final_vcf(self, vcf_in, vcf_out):
         command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
