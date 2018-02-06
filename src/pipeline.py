@@ -163,13 +163,6 @@ def make_pipeline(state):
        filter=suffix('.raw.vcf'),
        output='.raw.annotate.vcf')
 
-#    # Apply VariantFiltration using GATK
-#    pipeline.transform(
-#        task_func=stages.apply_variant_filtration_gatk,
-#        name='apply_variant_filtration_gatk',
-#        input=output_from('variant_annotator_gatk'),
-#        filter=suffix('.raw.annotate.vcf'),
-#        output='.raw.annotate.filtered.vcf')
 
 #### split snps and indels for filtering ####
 
@@ -210,25 +203,22 @@ def make_pipeline(state):
         output='.raw.annotate.filtered.merged.vcf')
         .follows('apply_variant_filtration_indels_gatk'))
 
+    pipeline.transform(
+        task_func=stages.left_align_split_multi_allelics,
+        name="left_align_split_multi_allelics",
+        input=output_from('merge_filtered_vcfs_gatk'),
+        filter=suffix('.raw.annotate.filtered.merged.vcf'),
+        output='.raw.annotate.filtered.merged.split_multi.vcf')
 
-
-#    # Apply VEP 
-#    (pipeline.transform(
-#        task_func=stages.apply_vep,
-#        name='apply_vep',
-#        input=output_from('apply_variant_filtration_gatk'),
-#        filter=suffix('.raw.annotate.filtered.vcf'),
-#        output='.raw.annotate.filtered.vep.vcf')
-#        .follows('apply_variant_filtration_gatk'))
 
      #Apply VEP 
     (pipeline.transform(
         task_func=stages.apply_vep,
         name='apply_vep',
-        input=output_from('merge_filtered_vcfs_gatk'),
-        filter=suffix('.raw.annotate.filtered.merged.vcf'),
-        output='.raw.annotate.filtered.merged.vep.vcf')
-        .follows('merge_filtered_vcfs_gatk'))
+        input=output_from('left_align_split_multi_allelics'),
+        filter=suffix('.raw.annotate.filtered.merged.split_multi.vcf'),
+        output='.raw.annotate.filtered.merged.split_multi.vep.vcf')
+        .follows('left_align_split_multi_allelics'))
 
 #### concatenate undr_rover vcfs ####
 
