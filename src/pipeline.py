@@ -46,22 +46,6 @@ def make_pipeline(state):
         # The output file name is the sample name with a .bam extension.
         output='alignments/{sample[0]}.clipped.bam')
 
-
-    # Call variants using undr_rover
-    pipeline.transform(
-        task_func=stages.apply_undr_rover,
-        name='apply_undr_rover',
-        input=output_from('original_fastqs'),
-        # Match the R1 (read 1) FASTQ file and grab the path and sample name.
-        # This will be the first input to the stage.
-        filter=formatter('.+/(?P<sample>[a-zA-Z0-9_-]+)_R1_(?P<lib>[a-zA-Z0-9-:]+).fastq.gz'),
-        add_inputs=add_inputs(
-            '{path[0]}/{sample[0]}_R2_{lib[0]}.fastq.gz'),
-        extras=['{sample[0]}'],
-
-        # The output file name is the sample name with a .bam extension.
-        output='variants/undr_rover/{sample[0]}.vcf')
-
     # Sort the BAM file using Picard
     pipeline.transform(
         task_func=stages.sort_bam_picard,
@@ -140,28 +124,12 @@ def make_pipeline(state):
         output='variants/gatk/{sample[0]}.g.vcf')
         .follows('index_sort_bam_picard'))
 
-    # Combine G.VCF files for all samples using GATK
+    # Genotype G.VCF files using GATK, separately genotypes replicate pairs and controls
     pipeline.merge(
-        task_func=stages.combine_gvcf_gatk,
-        name='combine_gvcf_gatk',
+        task_func=stages.genotype_gvcf_gatk_replicates,
+        name='genotype_gvcf_gatk_replicates',
         input=output_from('call_haplotypecaller_gatk'),
-        output='variants/gatk/ALL.combined.vcf')
-
-    # Genotype G.VCF files using GATK
-    pipeline.transform(
-        task_func=stages.genotype_gvcf_gatk,
-        name='genotype_gvcf_gatk',
-        input=output_from('combine_gvcf_gatk'),
-        filter=suffix('.combined.vcf'),
-        output='.raw.vcf')
-
-    # Annotate VCF file using GATK
-    pipeline.transform(
-       task_func=stages.variant_annotator_gatk,
-       name='variant_annotator_gatk',
-       input=output_from('genotype_gvcf_gatk'),
-       filter=suffix('.raw.vcf'),
-       output='.raw.annotate.vcf')
+        output='variants/gatk/replicates_controls.combined.vcf')
 
 
 #### split snps and indels for filtering ####
@@ -202,52 +170,5 @@ def make_pipeline(state):
         add_inputs=add_inputs(['variants/gatk/ALL.raw.annotate.indels.filtered.vcf']),
         output='.raw.annotate.filtered.merged.vcf')
         .follows('apply_variant_filtration_indels_gatk'))
-
-    pipeline.transform(
-        task_func=stages.left_align_split_multi_allelics,
-        name="left_align_split_multi_allelics",
-        input=output_from('merge_filtered_vcfs_gatk'),
-        filter=suffix('.raw.annotate.filtered.merged.vcf'),
-        output='.raw.annotate.filtered.merged.split_multi.vcf')
-
-
-     #Apply VEP 
-    (pipeline.transform(
-        task_func=stages.apply_vep,
-        name='apply_vep',
-        input=output_from('left_align_split_multi_allelics'),
-        filter=suffix('.raw.annotate.filtered.merged.split_multi.vcf'),
-        output='.raw.annotate.filtered.merged.split_multi.vep.vcf')
-        .follows('left_align_split_multi_allelics'))
-
-#### concatenate undr_rover vcfs ####
-
-    pipeline.transform(
-        task_func=stages.sort_vcfs,
-        name='sort_vcfs',
-        input=output_from('apply_undr_rover'),
-        filter=suffix('.vcf'),
-        output='.sorted.vcf.gz')
-
-    pipeline.transform(
-        task_func=stages.index_vcfs,
-        name='index_vcfs',
-        input=output_from('sort_vcfs'),
-        filter=suffix('.sorted.vcf.gz'),
-        output='.sorted.vcf.gz.tbi')
-
-    (pipeline.merge(
-        task_func=stages.concatenate_vcfs,
-        name='concatenate_vcfs',
-        input=output_from('sort_vcfs'),
-        output='variants/undr_rover/combined_undr_rover.vcf.gz')
-        .follows('index_vcfs')) 
-
-    pipeline.transform(
-        task_func=stages.index_final_vcf,
-        name='index_final_vcf',
-        input=output_from('concatenate_vcfs'),
-        filter=suffix('.vcf.gz'),
-        output='.vcf.gz.tbi')
 
     return pipeline

@@ -98,36 +98,6 @@ class Stages(object):
                           bam=bam_out)
         run_stage(self.state, 'align_bwa', command)
 
-    def apply_undr_rover(self, inputs, vcf_output, sample_id):
-        '''Apply undr_rover to call variants from paired end fastq files'''
-        fastq_read1_in, fastq_read2_in = inputs
-        cores = self.get_stage_options('apply_undr_rover', 'cores')
-        safe_make_dir('variants/undr_rover')
-        safe_make_dir('variants/undr_rover/coverdir')
-        coverdir = "variants/undr_rover/coverdir"
-        coverfile = sample_id + ".coverage"
-
-        command = 'undr_rover --primer_coords {coord_file} ' \
-                  '--primer_sequences {primer_file} ' \
-                  '--reference {reference} ' \
-                  '--out {vcf_output} ' \
-                  '--coverfile {coverdir}/{coverfile} ' \
-                  '--proportionthresh {proportionthresh} ' \
-                  '--absthresh {absthresh} ' \
-                  '--max_variants {maxvariants} ' \
-                  '{fastq_read1} {fastq_read2}'.format(
-                        coord_file=self.coord_file, primer_file=self.primer_file,
-                        reference=self.reference,
-                        vcf_output=vcf_output,
-                        coverdir=coverdir,
-                        proportionthresh=self.proportionthresh,
-                        absthresh=self.absthresh,
-                        maxvariants=self.maxvariants,
-                        coverfile=coverfile,
-                        fastq_read1=fastq_read1_in,
-                        fastq_read2=fastq_read2_in)
-        run_stage(self.state, 'apply_undr_rover', command)
-
     def sort_bam_picard(self, bam_in, sorted_bam_out):
         '''Sort the BAM file using Picard'''
         picard_args = 'SortSam INPUT={bam_in} OUTPUT={sorted_bam_out} ' \
@@ -207,16 +177,79 @@ class Stages(object):
         final_command = ''.join(merge_commands)
         run_stage(self.state, 'combine_gvcf_gatk', final_command)
 
-    def genotype_gvcf_gatk(self, combined_vcf_in, vcf_out):
-        '''Genotype G.VCF files using GATK'''
-        cores = self.get_stage_options('genotype_gvcf_gatk', 'cores')
-        gatk_args = "-T GenotypeGVCFs -R {reference} " \
+#     def genotype_gvcf_gatk(self, combined_vcf_in, vcf_out):
+#         '''Genotype G.VCF files using GATK'''
+#         cores = self.get_stage_options('genotype_gvcf_gatk', 'cores')
+#         gatk_args = "-T GenotypeGVCFs -R {reference} " \
+#                     "--disable_auto_index_creation_and_locking_when_reading_rods " \
+#                     "--dbsnp {dbsnp} " \
+#                     "--num_threads {cores} --variant {combined_vcf} --out {vcf_out}" \
+#                     .format(reference=self.reference, dbsnp=self.dbsnp_hg19,
+#                             cores=cores, combined_vcf=combined_vcf_in, vcf_out=vcf_out)
+#         self.run_gatk('genotype_gvcf_gatk', gatk_args)
+
+    def genotype_gvcf_gatk_replicates(self, vcf_files_in, vcf_out):
+        '''Merge step from haplotypecaller. Genotypes replicates/controls in groups'''
+        cores = self.get_stage_options('genotype_gvcf_gatk_replicates', 'cores')
+        replicates = []  # Keeping track of which samples are replicates
+        # Group vcfs by BS ID
+        genotype_groups_raw = {}
+        for vcf in vcf_files_in:
+            bsid_result = re.search("BS\d\d\d\d\d\d", vcf)
+            if bsid_result:
+                bsid = bsid_result.group(0)
+                if bsid in genotype_groups_raw:
+                    genotype_groups_raw[bsid].append(vcf)
+                    replicates.extend(genotype_groups_raw[bsid])
+                else:
+                    genotype_groups_raw[bsid] = [vcf]
+        # Only retain paired replicates
+        genotype_groups = {}
+        for bsid in genotype_groups_raw:
+            if genotype_groups_raw[bsid] > 1:
+                genotype_groups[bsid] = genotype_groups_raw[bsid]
+        # # Non-replicates are assumed to be controls  # CONTROLS
+        # controls = [vcf for vcf in vcf_files_in if vcf not in replicates]  # CONTROLS
+        # Defining base GATK arguments, missing output and input files
+        gatk_args = "java -Xmx{mem}g -jar {jar_path} -T GenotypeGVCFs -R {reference} " \
                     "--disable_auto_index_creation_and_locking_when_reading_rods " \
                     "--dbsnp {dbsnp} " \
-                    "--num_threads {cores} --variant {combined_vcf} --out {vcf_out}" \
-                    .format(reference=self.reference, dbsnp=self.dbsnp_hg19,
-                            cores=cores, combined_vcf=combined_vcf_in, vcf_out=vcf_out)
-        self.run_gatk('genotype_gvcf_gatk', gatk_args)
+                    "--num_threads {cores} " \
+                        .format(reference=self.reference, 
+                                dbsnp=self.dbsnp_hg19,
+                                cores=cores, 
+                                mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
+                                jar_path=GATK_JAR)
+        # Constructing GATK commands to joint genotype each replicate pair
+        command_list = []
+        partial_output_files = []
+        for replicate_id in genotype_groups:
+            output_filename = vcf_out[:-4] + ".{ID}.vcf".format(ID=replicate_id)
+            partial_output_files.append(output_filename)
+            gatk_command = gatk_args + ' '.join(["--variant " + vcf for vcf in genotype_groups[replicate_id]])
+            gatk_command += "--out {outputfile}; ".format(outputfile=output_filename)
+            command_list.append(gatk_command)
+        # # Joint genotyping positive control commands  # CONTROLS
+        # control_output_name = output_vcf[:-4] + ".controls.vcf"  # CONTROLS
+        # control_genotype_command =  gatk_args + ' '.join(["--variant " + vcf for vcf in controls])  # CONTROLS
+        # control_genotype_command += "--out {outputfile}; ".format(outputfile=control_output_name)  # CONTROLS
+        # partial_output_files.append(control_output_name)  # CONTROLS
+        # command_list.append(control_genotype_command)  # CONTROLS
+        # Command to merge all joint genotyped vcfs
+        partial_output_files_formatted = ' '.join(["--variant " + vcf for vcf in partial_output_files])
+        merge_command = "java -Xmx{mem}g -jar {jar_path} -T CombineVariants " \
+                        "-R {reference} " \
+                        "{filelist} " \
+                        "--out {outputvcf} " \
+                        "-genotypeMergeOptions UNIQUIFY".format(reference=self.reference, 
+                                                                filelist=partial_output_files_formatted, 
+                                                                mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
+                                                                jar_path=GATK_JAR, 
+                                                                outputvcf=output_vcf)
+        command_list.append(merge_command)
+        final_command = ''.join(command_list)
+        # Run the command
+        run_stage(self.state, 'genotype_gvcf_gatk_replicates', final_command)
 
     def variant_annotator_gatk(self, vcf_in, vcf_out):
         '''Annotate G.VCF files using GATK'''
@@ -318,55 +351,55 @@ class Stages(object):
         self.run_gatk('left_align_split_multi_allelics', gatk_args)
 
 
-#    def apply_vep(self, inputs, vcf_out):
-#        '''Apply VEP'''
-#        vcf_in = inputs
-#        cores = self.get_stage_options('apply_vep', 'cores')
-#        vep_command = "vep --cache --dir_cache {other_vep} --assembly GRCh37 --refseq --offline --fasta {reference} " \
-#                    "-i {vcf_in} --sift b --polyphen b --symbol --numbers --biotype --total_length --hgvs " \
-#                    "--format vcf -o {vcf_vep} --force_overwrite --vcf " \
-#                    "--fields Consequence,Codons,Amino_acids,Gene,SYMBOL,Feature,EXON,PolyPhen,SIFT," \
-#                    "Protein_position,BIOTYPE,HGVSc,HGVSp,cDNA_position,CDS_position,HGVSc,HGVSp,cDNA_position,CDS_position,PICK " \
-#                    "--fork {threads} --flag_pick".format(
-#                    reference=self.reference, vcf_in=vcf_in, vcf_vep=vcf_out, other_vep=self.other_vep, threads=cores)
-#        run_stage(self.state, 'apply_vep', vep_command)
-
-    def apply_vep(self, inputs, vcf_out):
-            '''Apply VEP'''
-            vcf_in = inputs
-            cores = self.get_stage_options('apply_vep', 'cores')
-            vep_command = "vep --cache --dir_cache {other_vep} " \
-                          "--assembly GRCh37 --refseq --offline " \
-                          "--fasta {reference} " \
-                          "--sift b --polyphen b --symbol --numbers --biotype --total_length --hgvs --format vcf " \
-                          "--vcf --force_overwrite --flag_pick --no_stats " \
-                          "--custom {brcaexpath},brcaex,vcf,exact,0,Clinical_significance_ENIGMA,Comment_on_clinical_significance_ENIGMA,Date_last_evaluated_ENIGMA,Pathogenicity_expert,HGVS_cDNA,HGVS_Protein,BIC_Nomenclature " \
-                          "--custom {gnomadpath},gnomAD,vcf,exact,0,AF_NFE,AN_NFE " \
-                          "--custom {revelpath},RVL,vcf,exact,0,REVEL_SCORE " \
-                          "--plugin MaxEntScan,{maxentscanpath} " \
-                          "--plugin ExAC,{exacpath},AC,AN " \
-                          "--plugin dbNSFP,{dbnsfppath},REVEL_score,REVEL_rankscore " \
-                          "--plugin dbscSNV,{dbscsnvpath} " \
-                          "--plugin CADD,{caddpath} " \
-                          "--fork {cores} " \
-                          "-i {vcf_in} " \
-                          "-o {vcf_out}".format(other_vep=self.other_vep, 
-                                                cores=cores, 
-                                                vcf_out=vcf_out, 
-                                                vcf_in=vcf_in, 
-                                                reference=self.reference, 
-                                                brcaexpath=self.brcaex, 
-                                                gnomadpath=self.gnomad, 
-                                                revelpath=self.revel, 
-                                                maxentscanpath=self.maxentscan, 
-                                                exacpath=self.exac, 
-                                                dbnsfppath=self.dbnsfp, 
-                                                dbscsnvpath=self.dbscsnv, 
-                                                caddpath=self.cadd)
-
-
-
-######  stats sections
+# #    def apply_vep(self, inputs, vcf_out):
+# #        '''Apply VEP'''
+# #        vcf_in = inputs
+# #        cores = self.get_stage_options('apply_vep', 'cores')
+# #        vep_command = "vep --cache --dir_cache {other_vep} --assembly GRCh37 --refseq --offline --fasta {reference} " \
+# #                    "-i {vcf_in} --sift b --polyphen b --symbol --numbers --biotype --total_length --hgvs " \
+# #                    "--format vcf -o {vcf_vep} --force_overwrite --vcf " \
+# #                    "--fields Consequence,Codons,Amino_acids,Gene,SYMBOL,Feature,EXON,PolyPhen,SIFT," \
+# #                    "Protein_position,BIOTYPE,HGVSc,HGVSp,cDNA_position,CDS_position,HGVSc,HGVSp,cDNA_position,CDS_position,PICK " \
+# #                    "--fork {threads} --flag_pick".format(
+# #                    reference=self.reference, vcf_in=vcf_in, vcf_vep=vcf_out, other_vep=self.other_vep, threads=cores)
+# #        run_stage(self.state, 'apply_vep', vep_command)
+# 
+#     def apply_vep(self, inputs, vcf_out):
+#             '''Apply VEP'''
+#             vcf_in = inputs
+#             cores = self.get_stage_options('apply_vep', 'cores')
+#             vep_command = "vep --cache --dir_cache {other_vep} " \
+#                           "--assembly GRCh37 --refseq --offline " \
+#                           "--fasta {reference} " \
+#                           "--sift b --polyphen b --symbol --numbers --biotype --total_length --hgvs --format vcf " \
+#                           "--vcf --force_overwrite --flag_pick --no_stats " \
+#                           "--custom {brcaexpath},brcaex,vcf,exact,0,Clinical_significance_ENIGMA,Comment_on_clinical_significance_ENIGMA,Date_last_evaluated_ENIGMA,Pathogenicity_expert,HGVS_cDNA,HGVS_Protein,BIC_Nomenclature " \
+#                           "--custom {gnomadpath},gnomAD,vcf,exact,0,AF_NFE,AN_NFE " \
+#                           "--custom {revelpath},RVL,vcf,exact,0,REVEL_SCORE " \
+#                           "--plugin MaxEntScan,{maxentscanpath} " \
+#                           "--plugin ExAC,{exacpath},AC,AN " \
+#                           "--plugin dbNSFP,{dbnsfppath},REVEL_score,REVEL_rankscore " \
+#                           "--plugin dbscSNV,{dbscsnvpath} " \
+#                           "--plugin CADD,{caddpath} " \
+#                           "--fork {cores} " \
+#                           "-i {vcf_in} " \
+#                           "-o {vcf_out}".format(other_vep=self.other_vep, 
+#                                                 cores=cores, 
+#                                                 vcf_out=vcf_out, 
+#                                                 vcf_in=vcf_in, 
+#                                                 reference=self.reference, 
+#                                                 brcaexpath=self.brcaex, 
+#                                                 gnomadpath=self.gnomad, 
+#                                                 revelpath=self.revel, 
+#                                                 maxentscanpath=self.maxentscan, 
+#                                                 exacpath=self.exac, 
+#                                                 dbnsfppath=self.dbnsfp, 
+#                                                 dbscsnvpath=self.dbscsnv, 
+#                                                 caddpath=self.cadd)
+# 
+# 
+# 
+#####  stats sections
 
     def intersect_bed(self, bam_in, bam_out):
         '''intersect the bed file with the interval file '''
@@ -399,53 +432,51 @@ class Stages(object):
                         bam_in=bam_in, txt_out=txt_out)
         run_stage(self.state, 'total_reads', command)
 
-#    def generate_stats(self, inputs, txt_out):
-#        '''run R stats script'''
-#        a, b, c, d, e = inputs
-#        command = 'Rscript --vanilla /projects/vh83/pipelines/code/modified_summary_stat.R \
-#                    {hist_in} {map_genome_in} {map_target_in} {raw_reads_in} {sample_name} \
-#                    {txt_out}'.format(hist_in=a, map_genome_in=b, map_target_in=c, raw_reads_in=d , sample_name=e , txt_out=txt_out)
-#        run_stage(self.state, 'generate_stats', command)
-
-#Rscript --vanilla ~/vh83/pipelines/code/summary_stat.R \
-#        metrics/${sample_run_name}.sort.bedtools_hist_all.txt \
-#        metrics/${sample_run_name}.sort.mapped_to_genome.txt \
-#        metrics/${sample_run_name}.sort.mapped_to_target.txt \
-#        metrics/${sample_run_name}.sort.total_raw_reads.txt \
-#        ${sample_run_name} \
-#        ${summary_prefix}_summary_coverage.txt
-
-    def sort_vcfs(self, vcf_in, vcf_out):
-        '''sort undr_rover vcf files'''
-        command = 'bcftools sort -o {vcf_out} -O z {vcf_in}'.format(vcf_out=vcf_out, vcf_in=vcf_in)
-        run_stage(self.state, 'sort_vcfs', command)
-    
-    def index_vcfs(self, vcf_in, vcf_out):
-        command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
-        run_stage(self.state, 'index_vcfs', command)
-    
-    def concatenate_vcfs(self, vcf_files_in, vcf_out):
-        merge_commands = []
-        temp_merge_outputs = []
-        for n in range(0, int(math.ceil(float(len(vcf_files_in)) / 200.0))):
-            start = n * 200
-            filelist = vcf_files_in[start:start + 200]
-            filelist_command = ' '.join([vcf for vcf in filelist])
-            temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf".format(start=str(start))
-            command1 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} && bcftools index -t -f {vcf_out}; '.format(vcf_out=temp_merge_filename, join_vcf_files=filelist_command)     
-            merge_commands.append(command1)
-            temp_merge_outputs.append(temp_merge_filename)
-
-        final_merge_vcfs = ' '.join([vcf for vcf in temp_merge_outputs])
-        command2 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=final_merge_vcfs)        
-
-        merge_commands.append(command2)
-        final_command = ''.join(merge_commands)
-        run_stage(self.state, 'concatenate_vcfs', final_command)
-
-    def index_final_vcf(self, vcf_in, vcf_out):
-        command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
-        run_stage(self.state, 'index_final_vcf', command)
-
-
-
+# #    def generate_stats(self, inputs, txt_out):
+# #        '''run R stats script'''
+# #        a, b, c, d, e = inputs
+# #        command = 'Rscript --vanilla /projects/vh83/pipelines/code/modified_summary_stat.R \
+# #                    {hist_in} {map_genome_in} {map_target_in} {raw_reads_in} {sample_name} \
+# #                    {txt_out}'.format(hist_in=a, map_genome_in=b, map_target_in=c, raw_reads_in=d , sample_name=e , txt_out=txt_out)
+# #        run_stage(self.state, 'generate_stats', command)
+# 
+# #Rscript --vanilla ~/vh83/pipelines/code/summary_stat.R \
+# #        metrics/${sample_run_name}.sort.bedtools_hist_all.txt \
+# #        metrics/${sample_run_name}.sort.mapped_to_genome.txt \
+# #        metrics/${sample_run_name}.sort.mapped_to_target.txt \
+# #        metrics/${sample_run_name}.sort.total_raw_reads.txt \
+# #        ${sample_run_name} \
+# #        ${summary_prefix}_summary_coverage.txt
+# 
+#     def sort_vcfs(self, vcf_in, vcf_out):
+#         '''sort undr_rover vcf files'''
+#         command = 'bcftools sort -o {vcf_out} -O z {vcf_in}'.format(vcf_out=vcf_out, vcf_in=vcf_in)
+#         run_stage(self.state, 'sort_vcfs', command)
+#     
+#     def index_vcfs(self, vcf_in, vcf_out):
+#         command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
+#         run_stage(self.state, 'index_vcfs', command)
+#     
+#     def concatenate_vcfs(self, vcf_files_in, vcf_out):
+#         merge_commands = []
+#         temp_merge_outputs = []
+#         for n in range(0, int(math.ceil(float(len(vcf_files_in)) / 200.0))):
+#             start = n * 200
+#             filelist = vcf_files_in[start:start + 200]
+#             filelist_command = ' '.join([vcf for vcf in filelist])
+#             temp_merge_filename = vcf_out.rstrip('.vcf') + ".temp_{start}.vcf".format(start=str(start))
+#             command1 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} && bcftools index -t -f {vcf_out}; '.format(vcf_out=temp_merge_filename, join_vcf_files=filelist_command)     
+#             merge_commands.append(command1)
+#             temp_merge_outputs.append(temp_merge_filename)
+# 
+#         final_merge_vcfs = ' '.join([vcf for vcf in temp_merge_outputs])
+#         command2 = 'bcftools concat -a -O z -o {vcf_out} {join_vcf_files} '.format(vcf_out=vcf_out, join_vcf_files=final_merge_vcfs)        
+# 
+#         merge_commands.append(command2)
+#         final_command = ''.join(merge_commands)
+#         run_stage(self.state, 'concatenate_vcfs', final_command)
+# 
+#     def index_final_vcf(self, vcf_in, vcf_out):
+#         command = 'bcftools index -f --tbi {vcf_in}'.format(vcf_in=vcf_in)
+#         run_stage(self.state, 'index_final_vcf', command)
+# 
