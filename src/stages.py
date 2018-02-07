@@ -11,6 +11,7 @@ from utils import safe_make_dir
 from runner import run_stage
 import os
 import math
+import re
 
 # PICARD_JAR = '$PICARD_HOME/lib/picard-1.69.jar'
 PICARD_JAR = '/usr/local/picard/2.9.2/picard.jar'
@@ -191,6 +192,7 @@ class Stages(object):
     def genotype_gvcf_gatk_replicates(self, vcf_files_in, vcf_out):
         '''Merge step from haplotypecaller. Genotypes replicates/controls in groups'''
         cores = self.get_stage_options('genotype_gvcf_gatk_replicates', 'cores')
+        mem = str(int(self.state.config.get_stage_options('genotype_gvcf_gatk_replicates', 'mem')) - 2)
         replicates = []  # Keeping track of which samples are replicates
         # Group vcfs by BS ID
         genotype_groups_raw = {}
@@ -218,7 +220,7 @@ class Stages(object):
                         .format(reference=self.reference, 
                                 dbsnp=self.dbsnp_hg19,
                                 cores=cores, 
-                                mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
+                                mem=mem, 
                                 jar_path=GATK_JAR)
         # Constructing GATK commands to joint genotype each replicate pair
         command_list = []
@@ -227,10 +229,10 @@ class Stages(object):
             output_filename = vcf_out[:-4] + ".{ID}.vcf".format(ID=replicate_id)
             partial_output_files.append(output_filename)
             gatk_command = gatk_args + ' '.join(["--variant " + vcf for vcf in genotype_groups[replicate_id]])
-            gatk_command += "--out {outputfile}; ".format(outputfile=output_filename)
+            gatk_command += " --out {outputfile}; ".format(outputfile=output_filename)
             command_list.append(gatk_command)
         # # Joint genotyping positive control commands  # CONTROLS
-        # control_output_name = output_vcf[:-4] + ".controls.vcf"  # CONTROLS
+        # control_output_name = vcf_out[:-4] + ".controls.vcf"  # CONTROLS
         # control_genotype_command =  gatk_args + ' '.join(["--variant " + vcf for vcf in controls])  # CONTROLS
         # control_genotype_command += "--out {outputfile}; ".format(outputfile=control_output_name)  # CONTROLS
         # partial_output_files.append(control_output_name)  # CONTROLS
@@ -243,9 +245,9 @@ class Stages(object):
                         "--out {outputvcf} " \
                         "-genotypeMergeOptions UNIQUIFY".format(reference=self.reference, 
                                                                 filelist=partial_output_files_formatted, 
-                                                                mem=self.state.config.get_stage_options('combine_gvcf_gatk', 'mem'), 
+                                                                mem=mem, 
                                                                 jar_path=GATK_JAR, 
-                                                                outputvcf=output_vcf)
+                                                                outputvcf=vcf_out)
         command_list.append(merge_command)
         final_command = ''.join(command_list)
         # Run the command

@@ -4,6 +4,7 @@ Build the pipeline workflow by plumbing the stages together.
 
 from ruffus import Pipeline, suffix, formatter, add_inputs, output_from
 from stages import Stages
+import re
 
 
 def make_pipeline(state):
@@ -129,7 +130,7 @@ def make_pipeline(state):
         task_func=stages.genotype_gvcf_gatk_replicates,
         name='genotype_gvcf_gatk_replicates',
         input=output_from('call_haplotypecaller_gatk'),
-        output='variants/gatk/replicates_controls.combined.raw.vcf')
+        output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
 
     pipeline.transform(
          task_func=stages.variant_annotator_gatk,
@@ -173,7 +174,7 @@ def make_pipeline(state):
         name='merge_filtered_vcfs_gatk',
         input=output_from('apply_variant_filtration_snps_gatk'),
         filter=suffix('.raw.annotate.snps.filtered.vcf'),
-        add_inputs=add_inputs(['variants/gatk/replicates_controls.combined.raw.annotate.indels.filtered.vcf']),
+        add_inputs=add_inputs(['variants/gatk/bstp_run1-7_replicates.combined.raw.annotate.indels.filtered.vcf']),
         output='.raw.annotate.filtered.merged.vcf')
         .follows('apply_variant_filtration_indels_gatk'))
 
