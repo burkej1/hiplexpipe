@@ -189,6 +189,35 @@ class Stages(object):
 #                             cores=cores, combined_vcf=combined_vcf_in, vcf_out=vcf_out)
 #         self.run_gatk('genotype_gvcf_gatk', gatk_args)
 
+
+    def genotype_gvcf_gatk_replicates_collate(self, vcf_pair_in, vcf_out):
+        cores = self.get_stage_options('genotype_gvcf_gatk_replicates_collate', 'cores')
+        vcfinput = ' '.join(["--variant " + vcf for vcf in vcf_pair_in])
+        gatk_args = "-T GenotypeGVCFs -R {reference} " \
+                    "--disable_auto_index_creation_and_locking_when_reading_rods " \
+                    "--dbsnp {dbsnp} " \
+                    "--num_threads {cores} {vcfinput} --out {vcf_out}" \
+                    .format(reference=self.reference, 
+                            dbsnp=self.dbsnp_hg19,
+                            cores=cores, 
+                            vcfinput=vcfinput, 
+                            vcf_out=vcf_out)
+        self.run_gatk('genotype_gvcf_gatk_replicates_collate', gatk_args)
+
+
+#     def merge_genotyped_replicates(self, vcf_files_in, vcf_out):
+#         gatk_args = "-T CombineVariants " \
+#                     "-R {reference} " \
+#                     "{filelist} " \
+#                     "--out {outputvcf} " \
+#                     "-genotypeMergeOptions UNIQUIFY".format(reference=self.reference, 
+#                                                             filelist=vcf_files_in_formatted, 
+#                                                             mem=mem, 
+#                                                             jar_path=GATK_JAR, 
+#                                                             outputvcf=vcf_out)
+    
+
+
     def genotype_gvcf_gatk_replicates(self, vcf_files_in, vcf_out):
         '''Merge step from haplotypecaller. Genotypes replicates/controls in groups'''
         cores = self.get_stage_options('genotype_gvcf_gatk_replicates', 'cores')

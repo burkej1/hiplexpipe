@@ -2,7 +2,7 @@
 Build the pipeline workflow by plumbing the stages together.
 '''
 
-from ruffus import Pipeline, suffix, formatter, add_inputs, output_from
+from ruffus import Pipeline, suffix, formatter, add_inputs, output_from, regex
 from stages import Stages
 import re
 
@@ -131,6 +131,14 @@ def make_pipeline(state):
         name='genotype_gvcf_gatk_replicates',
         input=output_from('call_haplotypecaller_gatk'),
         output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
+
+    pipeline.collate(
+        task_func=stages.genotype_gvcf_gatk_replicates_collate, 
+        name='genotype_gvcf_gatk_replicates_collate', 
+        input=output_from('call_haplotypecaller_gatk'), 
+        filter=regex(r'.+(BS\d\d\d\d\d\d).+'), 
+        output=r'variants/gatk/bstp_run1-7_replicates.combined.raw.\1.vcf') 
+        
 
     pipeline.transform(
          task_func=stages.variant_annotator_gatk,
