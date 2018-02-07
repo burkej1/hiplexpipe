@@ -125,6 +125,7 @@ class Stages(object):
         '''Call variants using GATK'''
         safe_make_dir('variants/gatk')
         # safe_make_dir('variants}'.format(sample=sample_id))
+        cores = self.get_stage_options('call_haplotypecaller_gatk', 'cores')
         gatk_args = "-T HaplotypeCaller -R {reference} --min_base_quality_score 20 " \
                     "--emitRefConfidence GVCF " \
                     "-A AlleleBalance -A AlleleBalanceBySample " \
@@ -140,8 +141,10 @@ class Stages(object):
                     "-A SampleList -A SpanningDeletions " \
                     "-A StrandBiasBySample -A StrandOddsRatio " \
                     "-A TandemRepeatAnnotator -A VariantType " \
+                    "-nct {cores} " \
                     "-I {bam} -L {interval_list} -o {out}".format(reference=self.reference,
-                                                                  bam=bam_in, interval_list=self.interval_file, out=vcf_out)
+                                                                  bam=bam_in, interval_list=self.interval_file, out=vcf_out, 
+                                                                  cores=cores)
         self.run_gatk('call_haplotypecaller_gatk', gatk_args)
 
     def combine_gvcf_gatk(self, vcf_files_in, vcf_out):

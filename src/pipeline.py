@@ -129,8 +129,14 @@ def make_pipeline(state):
         task_func=stages.genotype_gvcf_gatk_replicates,
         name='genotype_gvcf_gatk_replicates',
         input=output_from('call_haplotypecaller_gatk'),
-        output='variants/gatk/replicates_controls.combined.vcf')
+        output='variants/gatk/replicates_controls.combined.raw.vcf')
 
+    pipeline.transform(
+         task_func=stages.variant_annotator_gatk,
+         name='variant_annotator_gatk',
+         input=output_from('genotype_gvcf_gatk_replicates'),
+         filter=suffix('.raw.vcf'),
+         output='.raw.annotate.vcf')
 
 #### split snps and indels for filtering ####
 
@@ -167,7 +173,7 @@ def make_pipeline(state):
         name='merge_filtered_vcfs_gatk',
         input=output_from('apply_variant_filtration_snps_gatk'),
         filter=suffix('.raw.annotate.snps.filtered.vcf'),
-        add_inputs=add_inputs(['variants/gatk/ALL.raw.annotate.indels.filtered.vcf']),
+        add_inputs=add_inputs(['variants/gatk/replicates_controls.combined.raw.annotate.indels.filtered.vcf']),
         output='.raw.annotate.filtered.merged.vcf')
         .follows('apply_variant_filtration_indels_gatk'))
 
