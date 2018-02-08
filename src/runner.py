@@ -5,6 +5,7 @@ and command line options of the pipeline.
 '''
 
 from ruffus.drmaa_wrapper import run_job, error_drmaa_job
+import uuid
 
 
 # slurm memory is requested in MB, but the config file specifies in GB
@@ -56,8 +57,12 @@ def run_stage(state, stage, command):
     job_options = '--nodes=1 --ntasks-per-node={cores} --ntasks={cores} --time={time} --mem={mem} --partition={queue} --account={account}' \
                       .format(cores=cores, time=walltime, mem=mem, queue=queue, account=account)
 
+    # Generate a UUID for this job
+    job_uuid = str(uuid.uuid4())
+
     # Log a message about the job we are about to run
     log_messages = ['Running stage: {}'.format(stage),
+                    'UUID: {}'.format(job_uuid),
                     'Command: {}'.format(command)]
     if not run_local:
         log_messages.append('Job options: {}'.format(job_options))
@@ -82,3 +87,8 @@ def run_stage(state, stage, command):
                 job_other_options = job_options)
     except error_drmaa_job as err:
         raise Exception("\n".join(map(str, ["Failed to run:", command, err, stdout_res, stderr_res])))
+    # Adding stdout and stderr information to the logger
+    std_log_messages = ["UUID: {}".format(job_uuid), 
+                        "stdout:\n{}".format(''.join(stdout_res)), 
+                        "stderr:\n{}".format(''.join(stderr_res))]
+    state.logger.info('\n'.join(std_log_messages))
