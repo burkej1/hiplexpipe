@@ -24,7 +24,7 @@ def make_pipeline(state):
         name='original_fastqs',
         output=fastq_files)
 
-    # Align paired end reads in FASTQ to the reference producing a BAM file
+    # 1. Align paired end reads in FASTQ to the reference producing a BAM file
     pipeline.transform(
         task_func=stages.align_bwa,
         name='align_bwa',
@@ -47,7 +47,7 @@ def make_pipeline(state):
         # The output file name is the sample name with a .bam extension.
         output='alignments/{sample[0]}.clipped.bam')
 
-    # Sort the BAM file using Picard
+    # 2. Sort the BAM file using Picard
     pipeline.transform(
         task_func=stages.sort_bam_picard,
         name='sort_bam_picard',
@@ -55,7 +55,7 @@ def make_pipeline(state):
         filter=suffix('.clipped.bam'),
         output='.clipped.sort.bam')
 
-    # High quality and primary alignments
+    # 3. High quality and primary alignments
     pipeline.transform(
         task_func=stages.primary_bam,
         name='primary_bam',
@@ -63,7 +63,7 @@ def make_pipeline(state):
         filter=suffix('.clipped.sort.bam'),
         output='.clipped.sort.hq.bam')
 
-    # index bam file
+    # 4. index bam file
     pipeline.transform(
         task_func=stages.index_sort_bam_picard,
         name='index_bam',
@@ -116,7 +116,7 @@ def make_pipeline(state):
 #        output='all_sample.summary.txt')
 
     ###### GATK VARIANT CALLING ######
-    # Call variants using GATK
+    # 6. Call variants using GATK
     (pipeline.transform(
         task_func=stages.call_haplotypecaller_gatk,
         name='call_haplotypecaller_gatk',
@@ -125,30 +125,31 @@ def make_pipeline(state):
         output='variants/gatk/{sample[0]}.g.vcf')
         .follows('index_sort_bam_picard'))
 
-    # Genotype G.VCF files using GATK, separately genotypes replicate pairs and controls
-    pipeline.merge(
-        task_func=stages.genotype_gvcf_gatk_replicates,
-        name='genotype_gvcf_gatk_replicates',
-        input=output_from('call_haplotypecaller_gatk'),
-        output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
-
+    # 7. Genotype G.VCF files using GATK, separately genotypes replicate pairs
     pipeline.collate(
         task_func=stages.genotype_gvcf_gatk_replicates_collate, 
         name='genotype_gvcf_gatk_replicates_collate', 
         input=output_from('call_haplotypecaller_gatk'), 
         filter=regex(r'.+(BS\d\d\d\d\d\d).+'), 
         output=r'variants/gatk/bstp_run1-7_replicates.combined.raw.\1.vcf') 
-        
 
+    # 8. Merge genotyped replicate pairs into a single vcf
+    pipeline.merge(
+        task_func=stages.merge_genotyped_replicates, 
+        name='merge_genotyped_replicates', 
+        input=output_from('genotype_gvcf_gatk_replicates_collate'), 
+        output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
+
+    # 9. Add additional annotations to the genotyped vcf
     pipeline.transform(
          task_func=stages.variant_annotator_gatk,
          name='variant_annotator_gatk',
-         input=output_from('genotype_gvcf_gatk_replicates'),
+         input=output_from('merge_genotyped_replicates'),
          filter=suffix('.raw.vcf'),
          output='.raw.annotate.vcf')
 
 #### split snps and indels for filtering ####
-
+    # 10-snps. Extract SNPs 
     pipeline.transform(
         task_func=stages.select_variants_snps_gatk,
         name='select_variants_snps_gatk',
@@ -156,6 +157,7 @@ def make_pipeline(state):
         filter=suffix('raw.annotate.vcf'),
         output='raw.annotate.snps.vcf')
 
+    # 10-indels. Extract indels
     pipeline.transform(
         task_func=stages.select_variants_indels_gatk,
         name='select_variants_indels_gatk',
@@ -163,6 +165,7 @@ def make_pipeline(state):
         filter=suffix('raw.annotate.vcf'),
         output='raw.annotate.indels.vcf')
 
+    # 11-snps. Filter SNPs
     pipeline.transform(
         task_func=stages.apply_variant_filtration_snps_gatk,
         name='apply_variant_filtration_snps_gatk',
@@ -170,6 +173,7 @@ def make_pipeline(state):
         filter=suffix('raw.annotate.snps.vcf'),
         output='raw.annotate.snps.filtered.vcf')
 
+    # 11-indels. Filter indels
     pipeline.transform(
         task_func=stages.apply_variant_filtration_indels_gatk,
         name='apply_variant_filtration_indels_gatk',
@@ -177,6 +181,7 @@ def make_pipeline(state):
         filter=suffix('raw.annotate.indels.vcf'),
         output='raw.annotate.indels.filtered.vcf')
 
+    # 12. Merge filtered SNPs and indels
     (pipeline.transform(
         task_func=stages.merge_filtered_vcfs_gatk,
         name='merge_filtered_vcfs_gatk',
@@ -187,3 +192,11 @@ def make_pipeline(state):
         .follows('apply_variant_filtration_indels_gatk'))
 
     return pipeline
+
+
+
+#     pipeline.merge(
+#         task_func=stages.genotype_gvcf_gatk_replicates,
+#         name='genotype_gvcf_gatk_replicates',
+#         input=output_from('call_haplotypecaller_gatk'),
+#         output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
