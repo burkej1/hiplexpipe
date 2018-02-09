@@ -243,7 +243,7 @@ class Stages(object):
 
     def merge_filtered_vcfs_gatk(self, inputs, vcf_out):
         '''Merge filtered vcfs, snps and indels'''
-        snps_vcf, [indels_vcf] = inputs
+        snps_vcf, indels_vcf = inputs
         gatk_args = "-T CombineVariants " \
                     "-R {reference} " \
                     "-V:2 {snps_vcf} " \
@@ -285,6 +285,29 @@ class Stages(object):
         command = 'samtools view -c {bam_in} > {txt_out}'.format(
                         bam_in=bam_in, txt_out=txt_out)
         run_stage(self.state, 'total_reads', command)
+
+    def generate_stats(self, inputs, txt_out, samplename, joint_output):
+        '''run R stats script'''
+        # Assigning inputfiles to correct variables based on suffix
+        for inputfile in inputs:
+            if inputfile.endswith('.bedtools_hist_all.txt'):
+                a = inputfile
+            elif inputfile.endswith('.mapped_to_genome.txt'):
+                b = inputfile
+            elif inputfile.endswith('.mapped_to_target.txt'):
+                c = inputfile
+            elif inputfile.endswith('.total_raw_reads.txt'):
+                d = inputfile
+        e = samplename
+        command = 'Rscript --vanilla /projects/vh83/pipelines/code/modified_summary_stat.R ' \
+                  '{hist_in} {map_genome_in} {map_target_in} {raw_reads_in} {sample_name} ' \
+                  '{txt_out}'.format(hist_in=a, 
+                                      map_genome_in=b, 
+                                      map_target_in=c, 
+                                      raw_reads_in=d , 
+                                      sample_name=e , 
+                                      txt_out=joint_output)
+        run_stage(self.state, 'generate_stats', command)
 
 
 # # # # # # Discards # # # # # # 

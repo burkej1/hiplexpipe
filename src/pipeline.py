@@ -107,13 +107,13 @@ def make_pipeline(state):
         filter=suffix('.clipped.bam'),
         output='.total_raw_reads.txt')
 
-#    pipeline.transform(
-#        task_func=stages.generate_stats,
-#        name='generate_stats',
-#        input=output_from(['coverage_bed', 'genome_reads', 'target_reads', 'total_reads']), 
-#        filter=formatter('.+/(?P<sample>.+).txt'),
-#        extras=['{sample[0]}'],
-#        output='all_sample.summary.txt')
+    pipeline.collate(
+        task_func=stages.generate_stats,
+        name='generate_stats',
+        input=output_from('coverage_bed', 'genome_reads', 'target_reads', 'total_reads'), 
+        filter=regex(r'.+/(.+BS\d\d\d\d\d\d.+S\d+)\..+\.txt'),
+        output=r'all_sample.summary.\1.txt',
+        extras=[r'\1', 'all_sample.summary.txt'])
 
     ###### GATK VARIANT CALLING ######
     # 6. Call variants using GATK
@@ -133,63 +133,61 @@ def make_pipeline(state):
         filter=regex(r'.+(BS\d\d\d\d\d\d).+'), 
         output=r'variants/gatk/bstp_run1-7_replicates.combined.raw.\1.vcf') 
 
-    # 8. Merge genotyped replicate pairs into a single vcf
-    pipeline.merge(
-        task_func=stages.merge_genotyped_replicates, 
-        name='merge_genotyped_replicates', 
-        input=output_from('genotype_gvcf_gatk_replicates_collate'), 
-        output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
+#    # 8. Merge genotyped replicate pairs into a single vcf
+#    pipeline.merge(
+#        task_func=stages.merge_genotyped_replicates, 
+#        name='merge_genotyped_replicates', 
+#        input=output_from('genotype_gvcf_gatk_replicates_collate'), 
+#        output='variants/gatk/bstp_run1-7_replicates.combined.raw.vcf')
 
-    # 9. Add additional annotations to the genotyped vcf
-    pipeline.transform(
-         task_func=stages.variant_annotator_gatk,
-         name='variant_annotator_gatk',
-         input=output_from('merge_genotyped_replicates'),
-         filter=suffix('.raw.vcf'),
-         output='.raw.annotate.vcf')
+#    # 9. Add additional annotations to the genotyped vcf
+#    pipeline.transform(
+#         task_func=stages.variant_annotator_gatk,
+#         name='variant_annotator_gatk',
+#         input=output_from('merge_genotyped_replicates'),
+#         filter=suffix('.raw.vcf'),
+#         output='.raw.annotate.vcf')
 
 #### split snps and indels for filtering ####
     # 10-snps. Extract SNPs 
     pipeline.transform(
         task_func=stages.select_variants_snps_gatk,
         name='select_variants_snps_gatk',
-        input=output_from('variant_annotator_gatk'),
-        filter=suffix('raw.annotate.vcf'),
-        output='raw.annotate.snps.vcf')
+        input=output_from('genotype_gvcf_gatk_replicates_collate'),
+        filter=suffix('vcf'),
+        output='snps.vcf')
 
     # 10-indels. Extract indels
     pipeline.transform(
         task_func=stages.select_variants_indels_gatk,
         name='select_variants_indels_gatk',
-        input=output_from('variant_annotator_gatk'),
-        filter=suffix('raw.annotate.vcf'),
-        output='raw.annotate.indels.vcf')
+        input=output_from('genotype_gvcf_gatk_replicates_collate'),
+        filter=suffix('vcf'),
+        output='indels.vcf')
 
     # 11-snps. Filter SNPs
     pipeline.transform(
         task_func=stages.apply_variant_filtration_snps_gatk,
         name='apply_variant_filtration_snps_gatk',
         input=output_from('select_variants_snps_gatk'),
-        filter=suffix('raw.annotate.snps.vcf'),
-        output='raw.annotate.snps.filtered.vcf')
+        filter=suffix('snps.vcf'),
+        output='snps.filtered.vcf')
 
     # 11-indels. Filter indels
     pipeline.transform(
         task_func=stages.apply_variant_filtration_indels_gatk,
         name='apply_variant_filtration_indels_gatk',
         input=output_from('select_variants_indels_gatk'),
-        filter=suffix('raw.annotate.indels.vcf'),
-        output='raw.annotate.indels.filtered.vcf')
+        filter=suffix('indels.vcf'),
+        output='indels.filtered.vcf')
 
     # 12. Merge filtered SNPs and indels
-    (pipeline.transform(
+    pipeline.collate(
         task_func=stages.merge_filtered_vcfs_gatk,
         name='merge_filtered_vcfs_gatk',
-        input=output_from('apply_variant_filtration_snps_gatk'),
-        filter=suffix('.raw.annotate.snps.filtered.vcf'),
-        add_inputs=add_inputs(['variants/gatk/bstp_run1-7_replicates.combined.raw.annotate.indels.filtered.vcf']),
-        output='.raw.annotate.filtered.merged.vcf')
-        .follows('apply_variant_filtration_indels_gatk'))
+        input=output_from('apply_variant_filtration_snps_gatk', 'apply_variant_filtration_indels_gatk'),
+        filter=regex(r'.+(BS\d\d\d\d\d\d).+'),
+        output=r'variants/gatk/bstp_run1-7_replicates.combined.raw.filtered.merged.\1.vcf')
 
     return pipeline
 
