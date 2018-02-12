@@ -73,6 +73,14 @@ def make_pipeline(state):
 
     # generate mapping metrics.
     pipeline.transform(
+        task_func=stages.generate_amplicon_metrics, 
+        name='generate_amplicon_metrics', 
+        input=output_from('primary_bam'), 
+        filter=formatter('.+/(?P<sample>[a-zA-Z0-9_-]+).clipped.sort.hq.bam'),
+        output='alignments/metrics/{sample[0]}.amplicon-metrics.txt',
+        extras=['{sample[0]}'])
+
+    pipeline.transform(
         task_func=stages.intersect_bed,
         name='intersect_bed',
         input=output_from('primary_bam'),
